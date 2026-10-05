@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Interactivo de E-Commerce & Perfil de Comprador</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Recharts -->
+  <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+</head>
+<body class="bg-slate-50 font-sans">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+    const { 
+      BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+      AreaChart, Area, PieChart, Pie, Cell 
+    } = Recharts;
+
+    const generateData = () => {
+      const data = [];
+      const categories = ['Electrónica', 'Moda', 'Hogar', 'Belleza'];
+      const products = {
+        'Electrónica': ['Smartphone Pro', 'Laptop Ultra', 'Auriculares BT'],
+        'Moda': ['Chaqueta Cuero', 'Zapatillas Urban', 'Gafas de Sol'],
+        'Hogar': ['Silla Ergonómica', 'Lámpara LED', 'Robot Aspirador'],
+        'Belleza': ['Set Cuidado Facial', 'Perfume Floral', 'Crema Hidratante']
+      };
+      const channels = ['Website', 'Mobile App', 'Social Media'];
+      const genders = ['Femenino', 'Masculino'];
+      const countries = ['México', 'España', 'Colombia', 'Argentina', 'Chile'];
+      const startDate = new Date('2023-10-01');
+      
+      for (let i = 0; i < 1000; i++) {
+        const category = categories[Math.floor(Math.random() * categories.length)];
+        const product = products[category][Math.floor(Math.random() * products[category].length)];
+        const channel = channels[Math.floor(Math.random() * channels.length)];
+        const gender = genders[Math.floor(Math.random() * genders.length)];
+        const country = countries[Math.floor(Math.random() * countries.length)];
+        let ageBase = Math.floor(Math.random() * 50) + 18;
+        let salesMultiplier = 1;
+        
+        if (category === 'Electrónica' && gender === 'Masculino') salesMultiplier = 1.5;
+        if (category === 'Belleza' && gender === 'Femenino') salesMultiplier = 1.6;
+        if (channel === 'Social Media' && ageBase < 30) salesMultiplier = 1.4;
+        
+        const date = new Date(startDate.getTime() + Math.random() * 90 * 24 * 60 * 60 * 1000);
+        const dayOfWeek = date.getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) salesMultiplier *= 1.3;
+
+        const basePrice = Math.random() * 150 + 20;
+        const netSales = Number((basePrice * salesMultiplier).toFixed(2));
+
+        data.push({
+          id: `ORD-${Math.floor(10000 + Math.random() * 90000)}`,
+          date: date.toISOString().split('T')[0],
+          dayOfWeek,
+          category,
+          product,
+          channel,
+          gender,
+          age: ageBase,
+          country,
+          netSales
+        });
+      }
+      return data;
+    };
+
+    const rawData = generateData();
+    const COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899'];
+    const DAYS_ES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+    function EcommerceDashboard() {
+      const [filters, setFilters] = useState({
+        day: 'Todos',
+        category: 'Todas',
+        product: 'Todos',
+        gender: 'Todos',
+        country: 'Todos',
+        ageRange: 'Todos'
+      });
+
+      const categories = ['Todas', ...new Set(rawData.map(d => d.category))];
+      const availableProducts = ['Todos', ...new Set(rawData
+        .filter(d => filters.category === 'Todas' || d.category === filters.category)
+        .map(d => d.product))];
+      const countries = ['Todos', ...new Set(rawData.map(d => d.country))];
+      const ageRanges = ['Todos', '18-25', '26-35', '36-50', '50+'];
+
+      const getAgeRange = (age) => {
+        if (age <= 25) return '18-25';
+        if (age <= 35) return '26-35';
+        if (age <= 50) return '36-50';
+        return '50+';
+      };
+
+      const filteredData = useMemo(() => {
+        return rawData.filter(item => {
+          const dayName = DAYS_ES[item.dayOfWeek];
+          const ageR = getAgeRange(item.age);
+          if (filters.day !== 'Todos' && dayName !== filters.day) return false;
+          if (filters.category !== 'Todas' && item.category !== filters.category) return false;
+          if (filters.product !== 'Todos' && item.product !== filters.product) return false;
+          if (filters.gender !== 'Todos' && item.gender !== filters.gender) return false;
+          if (filters.country !== 'Todos' && item.country !== filters.country) return false;
+          if (filters.ageRange !== 'Todos' && ageR !== filters.ageRange) return false;
+          return true;
+        });
+      }, [filters]);
+
+      const totalSales = filteredData.reduce((sum, item) => sum + item.netSales, 0);
+      const totalOrders = filteredData.length;
+      const avgTicket = totalOrders > 0 ? totalSales / totalOrders : 0;
+
+      const salesByDay = useMemo(() => {
+        const acc = DAYS_ES.map(day => ({ name: day, ventas: 0 }));
+        filteredData.forEach(item => { acc[item.dayOfWeek].ventas += item.netSales; });
+        return acc;
+      }, [filteredData]);
+
+      const salesByProduct = useMemo(() => {
+        const acc = {};
+        filteredData.forEach(item => { acc[item.product] = (acc[item.product] || 0) + item.netSales; });
+        return Object.entries(acc).map(([name, ventas]) => ({ name, ventas })).sort((a, b) => b.ventas - a.ventas).slice(0, 7);
+      }, [filteredData]);
+
+      const salesByChannel = useMemo(() => {
+        const acc = {};
+        filteredData.forEach(item => { acc[item.channel] = (acc[item.channel] || 0) + item.netSales; });
+        return Object.entries(acc).map(([name, value]) => ({ name, value }));
+      }, [filteredData]);
+
+      const salesByDemographics = useMemo(() => {
+        const acc = {
+          '18-25': { name: '18-25', Femenino: 0, Masculino: 0 },
+          '26-35': { name: '26-35', Femenino: 0, Masculino: 0 },
+          '36-50': { name: '36-50', Femenino: 0, Masculino: 0 },
+          '50+': { name: '50+', Femenino: 0, Masculino: 0 },
+        };
+        filteredData.forEach(item => {
+          const range = getAgeRange(item.age);
+          acc[range][item.gender] += item.netSales;
+        });
+        return Object.values(acc);
+      }, [filteredData]);
+
+      const handleFilterChange = (key, value) => {
+        setFilters(prev => ({
+          ...prev,
+          [key]: value,
+          ...(key === 'category' ? { product: 'Todos' } : {})
+        }));
+      };
+
+      return (
+        <div className="min-h-screen p-4 md:p-8 text-slate-800">
+          <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">Ventas & Perfil de Comprador</h1>
+              <p className="text-slate-500 mt-1">Dashboard interactivo para segmentación de audiencias y optimización de campañas.</p>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 px-4 py-3 rounded-lg max-w-md shadow-sm">
+              <p className="text-sm text-amber-900">
+                <span className="font-semibold">Insight Inteligente:</span> Analizando {totalOrders} registros. 
+                El ticket promedio es de <strong>${avgTicket.toFixed(2)} USD</strong>.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-8">
+            <div className="text-slate-700 font-semibold mb-4 border-b pb-2">Filtros Interactivos</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <div className="flex flex-col">
+                <label className="text-xs font-medium text-slate-500 mb-1">Día de Semana</label>
+                <select value={filters.day} onChange={(e) => handleFilterChange('day', e.target.value)} className="px-3 py-2 bg-slate-50 border rounded-lg text-sm">
+                  <option value="Todos">Todos los días</option>
+                  {DAYS_ES.map(day => <option key={day} value={day}>{day}</option>)}
+                </select>
+              </div>
+
+              <div className="flex flex-col">
+                <label className="text-xs font-medium text-slate-500 mb-1">Categoría</label>
+                <select value={filters.category} onChange={(e) => handleFilterChange('category', e.target.value)} className="px-3 py-2 bg-slate-50 border rounded-lg text-sm">
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+
+              <div className="flex flex-col">
+                <label className="text-xs font-medium text-slate-500 mb-1">Producto</label>
+                <select value={filters.product} onChange={(e) => handleFilterChange('product', e.target.value)} className="px-3 py-2 bg-slate-50 border rounded-lg text-sm">
+                  {availableProducts.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+
+              <div className="flex flex-col">
+                <label className="text-xs font-medium text-slate-500 mb-1">Rango de Edad</label>
+                <select value={filters.ageRange} onChange={(e) => handleFilterChange('ageRange', e.target.value)} className="px-3 py-2 bg-slate-50 border rounded-lg text-sm">
+                  {ageRanges.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+
+              <div className="flex flex-col">
+                <label className="text-xs font-medium text-slate-500 mb-1">Género</label>
+                <select value={filters.gender} onChange={(e) => handleFilterChange('gender', e.target.value)} className="px-3 py-2 bg-slate-50 border rounded-lg text-sm">
+                  <option value="Todos">Ambos</option>
+                  <option value="Femenino">Femenino</option>
+                  <option value="Masculino">Masculino</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col">
+                <label className="text-xs font-medium text-slate-500 mb-1">País</label>
+                <select value={filters.country} onChange={(e) => handleFilterChange('country', e.target.value)} className="px-3 py-2 bg-slate-50 border rounded-lg text-sm">
+                  {countries.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+              <p className="text-sm text-slate-500 font-medium">Ventas Totales (Netas)</p>
+              <p className="text-2xl font-bold text-slate-900">${totalSales.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+            </div>
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+              <p className="text-sm text-slate-500 font-medium">Transacciones (Órdenes)</p>
+              <p className="text-2xl font-bold text-slate-900">{totalOrders.toLocaleString()}</p>
+            </div>
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+              <p className="text-sm text-slate-500 font-medium">Ticket Promedio</p>
+              <p className="text-2xl font-bold text-slate-900">${avgTicket.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+              <h2 className="text-lg font-bold text-slate-800 mb-4">Ventas por Día de la Semana</h2>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={salesByDay}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" />
+                    <YAxis tickFormatter={(val) => `$${val/1000}k`} />
+                    <Tooltip formatter={(val) => [`$${val.toFixed(2)}`, 'Ventas']} />
+                    <Area type="monotone" dataKey="ventas" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+              <h2 className="text-lg font-bold text-slate-800 mb-4">Top Productos Vendidos</h2>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={salesByProduct} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" tickFormatter={(val) => `$${val/1000}k`} />
+                    <YAxis dataKey="name" type="category" width={110} />
+                    <Tooltip formatter={(val) => [`$${val.toFixed(2)}`, 'Ventas']} />
+                    <Bar dataKey="ventas" fill="#10b981" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+              <h2 className="text-lg font-bold text-slate-800 mb-4">Demografía: Edad y Género</h2>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={salesByDemographics}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" />
+                    <YAxis tickFormatter={(val) => `$${val/1000}k`} />
+                    <Tooltip formatter={(val) => [`$${val.toFixed(2)}`, 'Ventas']} />
+                    <Legend />
+                    <Bar dataKey="Femenino" stackId="a" fill="#ec4899" />
+                    <Bar dataKey="Masculino" stackId="a" fill="#3b82f6" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+              <h2 className="text-lg font-bold text-slate-800 mb-4">Distribución por Canal</h2>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={salesByChannel} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={70} outerRadius={100} fill="#8884d8" label>
+                      {salesByChannel.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(val) => [`$${val.toFixed(2)}`, 'Ventas']} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<EcommerceDashboard />);
+  </script>
+</body>
+</html>
